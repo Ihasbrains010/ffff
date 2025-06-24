@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spotify Auth</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #1DB954, #191414);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .container {
+            background: rgba(25, 20, 20, 0.9);
+            padding: 2rem;
+            border-radius: 20px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            max-width: 500px;
+            width: 90%;
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            color: #1DB954;
+        }
+        
+        .subtitle {
+            font-size: 1.1rem;
+            margin-bottom: 2rem;
+            opacity: 0.8;
+        }
+        
+        .btn {
+            background: #1DB954;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.1rem;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+            margin: 10px;
+        }
+        
+        .btn:hover {
+            background: #1ed760;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(29, 185, 84, 0.4);
+        }
+        
+        .user-info {
+            background: rgba(255,255,255,0.1);
+            padding: 1.5rem;
+            border-radius: 15px;
+            margin-top: 2rem;
+            text-align: left;
+        }
+        
+        .user-info h3 {
+            color: #1DB954;
+            margin-bottom: 1rem;
+        }
+        
+        .user-info p {
+            margin: 0.5rem 0;
+        }
+        
+        .profile-pic {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            margin: 1rem auto;
+            display: block;
+        }
+        
+        .error {
+            background: rgba(255, 0, 0, 0.2);
+            color: #ff6b6b;
+            padding: 1rem;
+            border-radius: 10px;
+            margin: 1rem 0;
+        }
+        
+        .loading {
+            color: #1DB954;
+            font-size: 1.2rem;
+            margin: 1rem 0;
+        }
+        
+        .token-display {
+            background: rgba(255,255,255,0.1);
+            padding: 1rem;
+            border-radius: 10px;
+            margin: 1rem 0;
+            word-break: break-all;
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎵 Spotify Auth</h1>
+        <p class="subtitle">Simple Spotify authentication for your playlist creator</p>
+        
+        <div id="login-section">
+            <button class="btn" onclick="loginWithSpotify()">Login with Spotify</button>
+        </div>
+        
+        <div id="loading-section" style="display: none;">
+            <p class="loading">Authenticating...</p>
+        </div>
+        
+        <div id="error-section" style="display: none;">
+            <div class="error">
+                <p id="error-message"></p>
+            </div>
+            <button class="btn" onclick="retry()">Try Again</button>
+        </div>
+        
+        <div id="success-section" style="display: none;">
+            <div class="user-info">
+                <h3>✅ Authentication Successful!</h3>
+                <img id="profile-pic" class="profile-pic" style="display: none;" />
+                <p><strong>User:</strong> <span id="user-name"></span></p>
+                <p><strong>Email:</strong> <span id="user-email"></span></p>
+                <p><strong>Country:</strong> <span id="user-country"></span></p>
+                <p><strong>Followers:</strong> <span id="user-followers"></span></p>
+                <p><strong>Plan:</strong> <span id="user-plan"></span></p>
+            </div>
+            
+            <div class="token-display">
+                <strong>Access Token:</strong><br>
+                <span id="access-token"></span>
+            </div>
+            
+            <button class="btn" onclick="logout()">Logout</button>
+            <button class="btn" onclick="copyToken()">Copy Token</button>
+        </div>
+    </div>
+
+    <script>
+        // Spotify app credentials
+        const CLIENT_ID = 'b2bee85f176549668d85bc8c6d9c232c';
+        const CLIENT_SECRET = '5f4f03ad5bbf4a038002c3310d2b9e75';
+        const REDIRECT_URI = 'https://ihasbrains010.github.io/ai-playlist-creater/';
+        
+        // Scopes for accessing user data
+        const SCOPES = [
+            'user-read-private',
+            'user-read-email',
+            'playlist-read-private',
+            'playlist-modify-public',
+            'playlist-modify-private',
+            'user-top-read',
+            'user-read-recently-played'
+        ].join(' ');
+
+        // Generate random string for state parameter
+        function generateRandomString(length) {
+            const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+            let text = '';
+            for (let i = 0; i < length; i++) {
+                text += possible.charAt(Math.floor(Math.random() * possible.length));
+            }
+            return text;
+        }
+
+        // Login with Spotify
+        function loginWithSpotify() {
+            const state = generateRandomString(16);
+            localStorage.setItem('spotify_auth_state', state);
+            
+            const params = new URLSearchParams({
+                response_type: 'code',
+                client_id: CLIENT_ID,
+                scope: SCOPES,
+                redirect_uri: REDIRECT_URI,
+                state: state,
+                show_dialog: 'true'
+            });
+            
+            window.location.href = `https://accounts.spotify.com/authorize?${params.toString()}`;
+        }
+
+        // Exchange authorization code for access token
+        async function exchangeCodeForToken(authCode) {
+            const authString = btoa(`${CLIENT_ID}:${CLIENT_SECRET}`);
+            
+            try {
+                const response = await fetch('https://accounts.spotify.com/api/token', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Basic ${authString}`,
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    },
+                    body: new URLSearchParams({
+                        grant_type: 'authorization_code',
+                        code: authCode,
+                        redirect_uri: REDIRECT_URI
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Token exchange failed: ${response.status}`);
+                }
+
+                return await response.json();
+            } catch (error) {
+                console.error('Token exchange error:', error);
+                throw error;
+            }
+        }
+
+        // Fetch user profile
+        async function fetchUserProfile(accessToken) {
+            try {
+                const response = await fetch('https://api.spotify.com/v1/me', {
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Profile fetch failed: ${response.status}`);
+                }
+                
+                return await response.json();
+            } catch (error) {
+                console.error('Profile fetch error:', error);
+                throw error;
+            }
+        }
+
+        // Show user info
+        function showUserInfo(user, accessToken) {
+            document.getElementById('user-name').textContent = user.display_name || 'N/A';
+            document.getElementById('user-email').textContent = user.email || 'N/A';
+            document.getElementById('user-country').textContent = user.country || 'N/A';
+            document.getElementById('user-followers').textContent = user.followers?.total || 'N/A';
+            document.getElementById('user-plan').textContent = user.product || 'N/A';
+            document.getElementById('access-token').textContent = accessToken;
+            
+            if (user.images && user.images.length > 0) {
+                const profilePic = document.getElementById('profile-pic');
+                profilePic.src = user.images[0].url;
+                profilePic.style.display = 'block';
+            }
+            
+            showSection('success-section');
+        }
+
+        // Show error
+        function showError(message) {
+            document.getElementById('error-message').textContent = message;
+            showSection('error-section');
+        }
+
+        // Show specific section
+        function showSection(sectionId) {
+            const sections = ['login-section', 'loading-section', 'error-section', 'success-section'];
+            sections.forEach(id => {
+                document.getElementById(id).style.display = id === sectionId ? 'block' : 'none';
+            });
+        }
+
+        // Copy token to clipboard
+        function copyToken() {
+            const token = document.getElementById('access-token').textContent;
+            navigator.clipboard.writeText(token).then(() => {
+                alert('Access token copied to clipboard!');
+            }).catch(() => {
+                alert('Failed to copy token. Please select and copy manually.');
+            });
+        }
+
+        // Logout
+        function logout() {
+            localStorage.removeItem('spotify_auth_state');
+            localStorage.removeItem('spotify_access_token');
+            showSection('login-section');
+        }
+
+        // Retry authentication
+        function retry() {
+            showSection('login-section');
+        }
+
+        // Handle page load
+        async function handlePageLoad() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const code = urlParams.get('code');
+            const state = urlParams.get('state');
+            const error = urlParams.get('error');
+            
+            // Clear URL parameters
+            if (code || error) {
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+            
+            if (error) {
+                showError(`Authentication failed: ${error}`);
+                return;
+            }
+            
+            if (code) {
+                const storedState = localStorage.getItem('spotify_auth_state');
+                
+                if (state !== storedState) {
+                    showError('State mismatch. Possible security issue.');
+                    return;
+                }
+                
+                showSection('loading-section');
+                
+                try {
+                    // Exchange code for token
+                    const tokenData = await exchangeCodeForToken(code);
+                    const accessToken = tokenData.access_token;
+                    
+                    // Store token
+                    localStorage.setItem('spotify_access_token', accessToken);
+                    
+                    // Fetch user profile
+                    const userProfile = await fetchUserProfile(accessToken);
+                    
+                    // Show success
+                    showUserInfo(userProfile, accessToken);
+                    
+                } catch (error) {
+                    showError(`Authentication failed: ${error.message}`);
+                }
+            } else {
+                // Check if we have a stored token
+                const storedToken = localStorage.getItem('spotify_access_token');
+                if (storedToken) {
+                    showSection('loading-section');
+                    try {
+                        const userProfile = await fetchUserProfile(storedToken);
+                        showUserInfo(userProfile, storedToken);
+                    } catch (error) {
+                        // Token might be expired, show login
+                        localStorage.removeItem('spotify_access_token');
+                        showSection('login-section');
+                    }
+                } else {
+                    showSection('login-section');
+                }
+            }
+        }
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', handlePageLoad);
+    </script>
+</body>
+</html>
